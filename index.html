@@ -1,0 +1,423 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>멍멍 타이머</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
+<style>
+/* Layout: wide screens split into a dog-on-progress-ring stage (left) and a time + controls panel (right); phones stack them. */
+:root{
+  --bg:#DCEBF1; --panel:#F7FBFC; --ink:#1D2A31; --muted:#566B77; --line:#BFD3DC;
+  --primary:#2E8452; --on-primary:#FFFFFF; --alert:#D9482F;
+  --fur:#E3A04A; --ear:#A8622A; --muzzle:#FFF1D6; --brow:#F7D9A4; --nose:#2B1F1B;
+  --mouth:#6A2B33; --tongue:#F27C8E; --collar:#D9483B; --tag:#F0B93A; --ball:#CFE04B;
+  --bone:#D9A84E; --shadow:rgba(30,60,75,.18);
+  --display:'Jua','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  --body:'Gowun Dodum','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1920; --panel:#15262E; --ink:#E9F2F5; --muted:#9BB0BA; --line:#2B414C;
+    --primary:#5CC184; --on-primary:#0B1A12; --alert:#FF7C65;
+    --fur:#E8A850; --ear:#B8702F; --bone:#F0D79E; --shadow:rgba(0,0,0,.4);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1920; --panel:#15262E; --ink:#E9F2F5; --muted:#9BB0BA; --line:#2B414C;
+  --primary:#5CC184; --on-primary:#0B1A12; --alert:#FF7C65;
+  --fur:#E8A850; --ear:#B8702F; --bone:#F0D79E; --shadow:rgba(0,0,0,.4);
+  color-scheme:dark;
+}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5}
+#root{min-height:100%}
+:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+
+.app{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding-inline:16px;padding-block:20px}
+.top{width:100%;max-width:960px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;margin:0;font-family:var(--display);font-weight:400;font-size:1.5rem}
+.brand svg{width:40px;height:16px;color:var(--bone)}
+.ghost{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.ghost svg{width:20px;height:20px}
+
+.card{width:100%;max-width:960px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:center}
+@media (min-width:820px){.card{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:36px}}
+
+/* stage */
+.stage{position:relative;width:min(100%,440px);aspect-ratio:1;margin-inline:auto}
+.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dogbox{position:absolute;inset:15% 13% 8% 13%}
+.dog{width:100%;height:100%;overflow:visible;display:block}
+.bubble{position:absolute;top:1%;right:1%;padding:2px 16px 4px;border-radius:20px;border:2.5px solid var(--ink);background:var(--panel);font-family:var(--display);font-size:1.6rem;line-height:1.3;transform-origin:15% 100%;animation:pop .9s ease-in-out infinite}
+.bubble::after{content:"";position:absolute;left:16px;bottom:-9px;width:14px;height:14px;background:var(--panel);border-right:2.5px solid var(--ink);border-bottom:2.5px solid var(--ink);transform:rotate(45deg)}
+.confetti{position:absolute;inset:-4%;overflow:hidden;pointer-events:none;border-radius:28px}
+.bit{position:absolute;top:-10%;width:28px;color:var(--bone);animation:fall 2.6s linear 4 both,spin 1.3s linear infinite}
+.bit svg{display:block;width:100%;height:auto}
+.bit-1{color:var(--fur)}
+.bit-2{color:var(--tongue)}
+
+/* dog animation hooks */
+.dog .dog-all{transform-origin:120px 246px}
+.dog .head{transform-origin:120px 168px}
+.dog .tail{transform-origin:170px 208px}
+.dog .ear{transform-box:fill-box;transform-origin:50% 6%}
+.dog .eye{transform-box:fill-box;transform-origin:50% 50%;animation:blink 4.2s infinite}
+.dog .pant{transform-box:fill-box;transform-origin:50% 0%}
+
+.mood-idle .tail{animation:wag 1.4s ease-in-out infinite alternate}
+.mood-idle .head{animation:tilt 3.2s ease-in-out infinite alternate}
+.mood-idle .ear-l{animation:earL 2.4s ease-in-out infinite alternate}
+.mood-idle .ear-r{animation:earR 2.4s ease-in-out infinite alternate}
+
+.mood-focus .tail{animation:wag .9s ease-in-out infinite alternate}
+.mood-focus .head{animation:nod 2s ease-in-out infinite}
+.mood-focus .ear-l{animation:earL 1.6s ease-in-out infinite alternate}
+.mood-focus .ear-r{animation:earR 1.6s ease-in-out infinite alternate}
+.mood-focus .pant{animation:pant .55s ease-in-out infinite alternate}
+
+.mood-excited .dog-all{animation:hop .5s ease-in-out infinite}
+.mood-excited .tail{animation:wag .22s ease-in-out infinite alternate}
+.mood-excited .head{animation:tilt .4s ease-in-out infinite alternate}
+.mood-excited .ear-l{animation:flapL .3s ease-in-out infinite alternate}
+.mood-excited .ear-r{animation:flapR .3s ease-in-out infinite alternate}
+.mood-excited .pant{animation:pant .2s ease-in-out infinite alternate}
+
+.mood-done .dog-all{animation:jump .8s ease-in-out infinite}
+.mood-done .tail{animation:wag .18s ease-in-out infinite alternate}
+.mood-done .head{animation:tilt .35s ease-in-out infinite alternate}
+.mood-done .ear-l{animation:flapL .3s ease-in-out infinite alternate}
+.mood-done .ear-r{animation:flapR .3s ease-in-out infinite alternate}
+.mood-done .pant{animation:pant .25s ease-in-out infinite alternate}
+
+.mood-sleep .tail{transform:rotate(14deg)}
+.mood-sleep .head{transform:rotate(7deg) translateY(4px)}
+.zz{font-family:var(--display);fill:var(--muted);animation:floatZ 2.4s ease-in infinite}
+
+@keyframes wag{from{transform:rotate(-14deg)}to{transform:rotate(16deg)}}
+@keyframes tilt{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}
+@keyframes nod{0%,100%{transform:rotate(0) translateY(0)}50%{transform:rotate(-2deg) translateY(2px)}}
+@keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@keyframes jump{0%,100%{transform:translateY(0) scale(1.04,.96)}45%{transform:translateY(-28px) scale(.97,1.04)}}
+@keyframes blink{0%,90%,100%{transform:scaleY(1)}94%{transform:scaleY(.08)}}
+@keyframes earL{from{transform:rotate(3deg)}to{transform:rotate(-6deg)}}
+@keyframes earR{from{transform:rotate(-3deg)}to{transform:rotate(6deg)}}
+@keyframes flapL{from{transform:rotate(8deg)}to{transform:rotate(-14deg)}}
+@keyframes flapR{from{transform:rotate(-8deg)}to{transform:rotate(14deg)}}
+@keyframes pant{from{transform:scaleY(.85)}to{transform:scaleY(1.2)}}
+@keyframes floatZ{0%{transform:translate(0,6px);opacity:0}30%{opacity:1}100%{transform:translate(8px,-14px);opacity:0}}
+@keyframes pop{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(1.12) rotate(3deg)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes fall{from{top:-10%}to{top:104%}}
+@keyframes spin{from{transform:rotate(var(--r))}to{transform:rotate(calc(var(--r) + 360deg))}}
+
+/* panel */
+.panel{display:flex;flex-direction:column;gap:18px;min-width:0;padding:24px 20px;border-radius:28px;border:1px solid var(--line);background:var(--panel)}
+.say{margin:0;min-height:1.6em;font-family:var(--display);font-size:1.15rem;color:var(--muted);text-wrap:balance}
+.time{display:flex;justify-content:center;margin:0;font-family:var(--display);font-size:clamp(3.6rem,18vw,6.8rem);line-height:1;color:var(--ink)}
+.time span{display:inline-block;text-align:center}
+.time .d{width:.62em}
+.time .c{width:.34em}
+.time.alert{color:var(--alert)}
+.time.excited{animation:pulse 1s ease-in-out infinite}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:8px 16px;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font-family:var(--display);font-size:1rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.custom{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.custom .title{margin-right:4px;color:var(--muted)}
+.num{width:4.6rem;min-height:44px;padding:0 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-family:var(--display);font-size:1.15rem;text-align:center}
+.custom label{margin-right:6px}
+
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 22px;border-radius:16px;border:2px solid var(--line);background:transparent;color:var(--ink);font-family:var(--display);font-size:1.2rem;cursor:pointer}
+.btn svg{width:20px;height:20px}
+.btn.primary{flex:1 1 160px;background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:active:not(:disabled){transform:translateY(1px)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .confetti{display:none}
+}
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+(function () {
+  var useState = React.useState, useEffect = React.useEffect, useRef = React.useRef;
+  var e = React.createElement;
+
+  var PRESETS = [1, 3, 5, 10, 15, 30];
+  var LABEL = {
+    idle: '꼬리를 흔들며 앉아 있는 강아지',
+    focus: '혀를 내밀고 기다리는 강아지',
+    excited: '신나서 폴짝폴짝 뛰는 강아지',
+    sleep: '눈을 감고 졸고 있는 강아지',
+    done: '기뻐서 뛰어오르며 짖는 강아지'
+  };
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmt(total) {
+    var h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+    return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+  }
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  function readMuted() {
+    try { return localStorage.getItem('dog-timer-muted') === '1'; } catch (_) { return false; }
+  }
+
+  function bark(ctx) {
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      var t0 = ctx.currentTime;
+      [0, 0.28, 0.9, 1.18].forEach(function (off) {
+        var o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(420, t0 + off);
+        o.frequency.exponentialRampToValueAtTime(170, t0 + off + 0.16);
+        f.type = 'bandpass'; f.Q.value = 2.2;
+        f.frequency.setValueAtTime(1100, t0 + off);
+        f.frequency.exponentialRampToValueAtTime(600, t0 + off + 0.16);
+        g.gain.setValueAtTime(0.0001, t0 + off);
+        g.gain.exponentialRampToValueAtTime(0.5, t0 + off + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.2);
+        o.connect(f); f.connect(g); g.connect(ctx.destination);
+        o.start(t0 + off); o.stop(t0 + off + 0.22);
+      });
+    } catch (_) {}
+  }
+
+  /* ---------- small icons ---------- */
+  function BoneIcon() {
+    return e('svg', { viewBox: '0 0 40 16', fill: 'currentColor', 'aria-hidden': 'true' },
+      e('rect', { x: 8, y: 4, width: 24, height: 8, rx: 3 }),
+      e('circle', { cx: 7, cy: 4.5, r: 4.5 }), e('circle', { cx: 7, cy: 11.5, r: 4.5 }),
+      e('circle', { cx: 33, cy: 4.5, r: 4.5 }), e('circle', { cx: 33, cy: 11.5, r: 4.5 }));
+  }
+  function Icon(props) {
+    var p = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' };
+    if (props.name === 'play') return e('svg', p, e('path', { d: 'M7 4.5v15l12-7.5z', fill: 'currentColor' }));
+    if (props.name === 'pause') return e('svg', p, e('rect', { x: 6, y: 4.5, width: 4, height: 15, rx: 1, fill: 'currentColor' }), e('rect', { x: 14, y: 4.5, width: 4, height: 15, rx: 1, fill: 'currentColor' }));
+    if (props.name === 'replay') return e('svg', p, e('path', { d: 'M4 12a8 8 0 1 0 3-6.2M4 4v5h5' }));
+    if (props.name === 'sound') return e('svg', p, e('path', { d: 'M4 9v6h4l5 4V5L8 9z' }), e('path', { d: 'M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11' }));
+    return e('svg', p, e('path', { d: 'M4 9v6h4l5 4V5L8 9z' }), e('path', { d: 'M16 9l5 6M21 9l-5 6' }));
+  }
+
+  /* ---------- the dog ---------- */
+  function Dog(props) {
+    var mood = props.mood;
+    var open = mood === 'excited' || mood === 'done';
+    var sleep = mood === 'sleep', happy = mood === 'done';
+    var arcs = sleep ? ['M86 103 Q95 112 104 103', 'M136 103 Q145 112 154 103']
+      : happy ? ['M86 106 Q95 93 104 106', 'M136 106 Q145 93 154 106'] : null;
+    var stroke = { fill: 'none', stroke: 'var(--nose)', strokeWidth: 3, strokeLinecap: 'round' };
+
+    var eyes = arcs
+      ? arcs.map(function (d, i) { return e('path', Object.assign({ key: i, d: d }, stroke, { strokeWidth: 3.5 })); })
+      : [95, 145].map(function (x) {
+          return e('g', { key: x, className: 'eye' },
+            e('circle', { cx: x + 1, cy: 101, r: 7.5, fill: 'var(--nose)' }),
+            e('circle', { cx: x + 3.5, cy: 98.5, r: 2.6, fill: '#fff' }));
+        });
+
+    var mouth;
+    if (open) {
+      mouth = [
+        e('path', { key: 'm', d: 'M101 139 Q120 152 139 139 Q136 172 120 173 Q104 172 101 139 Z', fill: 'var(--mouth)' }),
+        e('path', { key: 't', className: 'pant', d: 'M110 156 Q120 148 130 156 Q128 170 120 171 Q112 170 110 156 Z', fill: 'var(--tongue)' }),
+        e('path', Object.assign({ key: 'p', d: 'M120 129 V140' }, stroke))
+      ];
+    } else {
+      mouth = [];
+      if (mood === 'focus') {
+        mouth.push(e('path', { key: 't', className: 'pant', d: 'M113 142 L127 142 L127 152 Q120 160 113 152 Z', fill: 'var(--tongue)' }));
+      }
+      mouth.push(e('path', Object.assign({ key: 'l', d: 'M120 129 V138 M120 138 Q111 148 101 141 M120 138 Q129 148 139 141' }, stroke)));
+    }
+
+    return e('svg', { className: 'dog mood-' + mood, viewBox: '0 0 240 250', role: 'img', 'aria-label': LABEL[mood] },
+      e('ellipse', { cx: 120, cy: 246, rx: 64, ry: 6, fill: 'var(--shadow)' }),
+      e('g', { className: 'dog-all' },
+        e('path', { className: 'tail', d: 'M170 208 Q210 198 205 152', fill: 'none', stroke: 'var(--fur)', strokeWidth: 16, strokeLinecap: 'round' }),
+        e('ellipse', { cx: 120, cy: 200, rx: 56, ry: 42, fill: 'var(--fur)' }),
+        e('ellipse', { cx: 120, cy: 214, rx: 28, ry: 24, fill: 'var(--muzzle)' }),
+        e('ellipse', { cx: 95, cy: 239, rx: 15, ry: 8, fill: 'var(--muzzle)' }),
+        e('ellipse', { cx: 145, cy: 239, rx: 15, ry: 8, fill: 'var(--muzzle)' }),
+        e('ellipse', { cx: 120, cy: 164, rx: 30, ry: 8, fill: 'var(--collar)' }),
+        e('circle', { cx: 120, cy: 177, r: 7, fill: 'var(--tag)', stroke: 'var(--ear)', strokeWidth: 1.5 }),
+        e('g', { className: 'head' },
+          e('ellipse', { cx: 120, cy: 105, rx: 62, ry: 56, fill: 'var(--fur)' }),
+          e('ellipse', { cx: 120, cy: 94, rx: 11, ry: 32, fill: 'var(--muzzle)', opacity: 0.9 }),
+          e('circle', { cx: 78, cy: 128, r: 8, fill: 'var(--tongue)', opacity: 0.35 }),
+          e('circle', { cx: 162, cy: 128, r: 8, fill: 'var(--tongue)', opacity: 0.35 }),
+          e('ellipse', { cx: 120, cy: 132, rx: 36, ry: 27, fill: 'var(--muzzle)' }),
+          e('ellipse', { cx: 96, cy: 85, rx: 7, ry: 4.5, fill: 'var(--brow)' }),
+          e('ellipse', { cx: 144, cy: 85, rx: 7, ry: 4.5, fill: 'var(--brow)' }),
+          eyes,
+          mouth,
+          e('ellipse', { cx: 120, cy: 121, rx: 12, ry: 8.5, fill: 'var(--nose)' }),
+          e('ellipse', { cx: 116, cy: 118, rx: 4, ry: 2, fill: '#fff', opacity: 0.5 }),
+          e('g', { transform: 'rotate(12 72 66)' },
+            e('g', { className: 'ear ear-l' }, e('ellipse', { cx: 66, cy: 98, rx: 19, ry: 38, fill: 'var(--ear)' }))),
+          e('g', { transform: 'rotate(-12 168 66)' },
+            e('g', { className: 'ear ear-r' }, e('ellipse', { cx: 174, cy: 98, rx: 19, ry: 38, fill: 'var(--ear)' })))
+        )
+      ),
+      sleep ? [
+        e('text', { key: 'z1', className: 'zz', x: 172, y: 58, fontSize: 20 }, 'Z'),
+        e('text', { key: 'z2', className: 'zz', x: 188, y: 40, fontSize: 26, style: { animationDelay: '.6s' } }, 'Z'),
+        e('text', { key: 'z3', className: 'zz', x: 204, y: 22, fontSize: 32, style: { animationDelay: '1.2s' } }, 'Z')
+      ] : null
+    );
+  }
+
+  /* ---------- progress ring with a tennis ball at the end ---------- */
+  function Ring(props) {
+    var f = props.f, R = 138, C = 2 * Math.PI * R, th = f * 2 * Math.PI;
+    var bx = 150 + R * Math.sin(th), by = 150 - R * Math.cos(th);
+    return e('svg', { className: 'ring', viewBox: '0 0 300 300', 'aria-hidden': 'true' },
+      e('circle', { cx: 150, cy: 150, r: R, fill: 'none', stroke: 'var(--line)', strokeWidth: 14 }),
+      e('circle', {
+        cx: 150, cy: 150, r: R, fill: 'none', stroke: props.alert ? 'var(--alert)' : 'var(--primary)',
+        strokeWidth: 14, strokeLinecap: 'round', strokeDasharray: C, strokeDashoffset: C * (1 - f),
+        transform: 'rotate(-90 150 150)', opacity: f > 0.001 ? 1 : 0
+      }),
+      e('g', { transform: 'translate(' + bx.toFixed(2) + ' ' + by.toFixed(2) + ')' },
+        e('circle', { r: 15, fill: 'var(--ball)', stroke: 'var(--ink)', strokeOpacity: 0.25, strokeWidth: 1.5 }),
+        e('path', { d: 'M-9 -9 Q-1 0 -9 9', fill: 'none', stroke: '#fff', strokeOpacity: 0.85, strokeWidth: 2, strokeLinecap: 'round' }),
+        e('path', { d: 'M9 -9 Q1 0 9 9', fill: 'none', stroke: '#fff', strokeOpacity: 0.85, strokeWidth: 2, strokeLinecap: 'round' })));
+  }
+
+  function Confetti() {
+    var bits = [];
+    for (var i = 0; i < 16; i++) {
+      bits.push(e('span', {
+        key: i, className: 'bit bit-' + (i % 3),
+        style: {
+          left: ((i * 37) % 92 + 2) + '%',
+          animationDelay: ((i % 8) * 0.22) + 's',
+          animationDuration: (2.2 + (i % 4) * 0.35) + 's, 1.3s',
+          '--r': ((i * 53) % 360) + 'deg'
+        }
+      }, e(BoneIcon)));
+    }
+    return e('div', { className: 'confetti', 'aria-hidden': 'true' }, bits);
+  }
+
+  function Time(props) {
+    return e('p', { className: 'time ' + props.cls, role: 'timer', 'aria-label': '남은 시간 ' + props.text },
+      props.text.split('').map(function (ch, i) {
+        return e('span', { key: i, className: ch === ':' ? 'c' : 'd', 'aria-hidden': 'true' }, ch);
+      }));
+  }
+
+  /* ---------- app ---------- */
+  function App() {
+    var _d = useState(180), duration = _d[0], setDuration = _d[1];
+    var _r = useState(180000), remaining = _r[0], setRemaining = _r[1];
+    var _s = useState('idle'), status = _s[0], setStatus = _s[1];
+    var _m = useState(readMuted), muted = _m[0], setMuted = _m[1];
+    var endRef = useRef(0), ctxRef = useRef(null), mutedRef = useRef(muted);
+
+    useEffect(function () {
+      mutedRef.current = muted;
+      try { localStorage.setItem('dog-timer-muted', muted ? '1' : '0'); } catch (_) {}
+    }, [muted]);
+
+    useEffect(function () {
+      if (status !== 'running') return;
+      var id = setInterval(function () {
+        var left = endRef.current - Date.now();
+        if (left <= 0) {
+          clearInterval(id);
+          setRemaining(0);
+          setStatus('done');
+          if (!mutedRef.current) bark(ctxRef.current);
+        } else {
+          setRemaining(left);
+        }
+      }, 100);
+      return function () { clearInterval(id); };
+    }, [status]);
+
+    function ensureAudio() {
+      if (!ctxRef.current) {
+        try { var AC = window.AudioContext || window.webkitAudioContext; if (AC) ctxRef.current = new AC(); } catch (_) {}
+      }
+      if (ctxRef.current && ctxRef.current.state === 'suspended') { try { ctxRef.current.resume(); } catch (_) {} }
+    }
+    function applyDuration(sec) {
+      setDuration(sec); setRemaining(sec * 1000); setStatus('idle');
+    }
+    function primary() {
+      if (status === 'running') {
+        setRemaining(Math.max(0, endRef.current - Date.now()));
+        setStatus('paused');
+        return;
+      }
+      ensureAudio();
+      var base = (status === 'done' || remaining <= 0) ? duration * 1000 : remaining;
+      setRemaining(base);
+      endRef.current = Date.now() + base;
+      setStatus('running');
+    }
+    function reset() { setRemaining(duration * 1000); setStatus('idle'); }
+
+    var mm = Math.floor(duration / 60), ss = duration % 60;
+    function onMin(ev) { applyDuration(clamp(parseInt(ev.target.value, 10) || 0, 0, 99) * 60 + ss); }
+    function onSec(ev) { applyDuration(mm * 60 + clamp(parseInt(ev.target.value, 10) || 0, 0, 59)); }
+
+    var secs = Math.ceil(remaining / 1000);
+    var mood = status === 'done' ? 'done' : status === 'paused' ? 'sleep'
+      : status === 'running' ? (secs <= 10 ? 'excited' : 'focus') : 'idle';
+    var f = duration > 0 ? Math.min(1, remaining / (duration * 1000)) : 0;
+    var hot = mood === 'excited' || mood === 'done';
+
+    var say = {
+      idle: '준비 완료! 시간을 정해 주세요.',
+      focus: '꼬리 살랑살랑, 열심히 기다리는 중이에요.',
+      excited: secs + '초! 곧 끝나요, 멍멍!',
+      sleep: '쿨쿨… 잠깐 쉬는 중이에요.',
+      done: '시간 끝! 멍멍!'
+    }[mood];
+    var main = { idle: '시작', running: '일시정지', paused: '이어서', done: '다시 시작' }[status];
+
+    return e('div', { className: 'app' },
+      e('header', { className: 'top' },
+        e('h1', { className: 'brand' }, e(BoneIcon), '멍멍 타이머'),
+        e('button', { className: 'ghost', id: 'sound-toggle', type: 'button', 'aria-pressed': !muted, onClick: function () { setMuted(!muted); } },
+          e(Icon, { name: muted ? 'mute' : 'sound' }), muted ? '소리 꺼짐' : '소리 켜짐')),
+      e('main', { className: 'card' },
+        e('section', { className: 'stage', 'aria-label': '강아지와 남은 시간 링' },
+          e(Ring, { f: f, alert: mood === 'excited' }),
+          e('div', { className: 'dogbox' }, e(Dog, { mood: mood })),
+          hot ? e('div', { className: 'bubble', 'aria-hidden': 'true' }, mood === 'done' ? '멍멍!' : '멍!') : null,
+          mood === 'done' ? e(Confetti) : null),
+        e('section', { className: 'panel' },
+          e('p', { className: 'say', 'aria-live': 'polite' }, say),
+          e(Time, { text: fmt(secs), cls: (hot ? 'alert ' : '') + (mood === 'excited' ? 'excited' : '') }),
+          e('div', { className: 'chips', role: 'group', 'aria-label': '시간 고르기' },
+            PRESETS.map(function (m) {
+              return e('button', { key: m, type: 'button', className: 'chip', 'aria-pressed': duration === m * 60, onClick: function () { applyDuration(m * 60); } }, m + '분');
+            })),
+          e('div', { className: 'custom' },
+            e('span', { className: 'title' }, '직접 입력'),
+            e('input', { id: 'custom-min', className: 'num', type: 'number', inputMode: 'numeric', min: 0, max: 99, value: mm, onChange: onMin }),
+            e('label', { htmlFor: 'custom-min' }, '분'),
+            e('input', { id: 'custom-sec', className: 'num', type: 'number', inputMode: 'numeric', min: 0, max: 59, value: ss, onChange: onSec }),
+            e('label', { htmlFor: 'custom-sec' }, '초')),
+          e('div', { className: 'actions' },
+            e('button', { type: 'button', id: 'primary-btn', className: 'btn primary', disabled: duration === 0, onClick: primary },
+              e(Icon, { name: status === 'running' ? 'pause' : status === 'done' ? 'replay' : 'play' }), main),
+            e('button', { type: 'button', id: 'reset-btn', className: 'btn', disabled: status === 'idle', onClick: reset },
+              e(Icon, { name: 'replay' }), '처음으로')))));
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+})();
+</script>
+
+</body></html>
